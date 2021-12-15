@@ -1,9 +1,18 @@
 const express = require('express');
-const { MongoClient } = require('mongodb');
+const { MongoClient, Admin } = require('mongodb');
+var admin = require("firebase-admin");
 const cors = require('cors');
 require('dotenv').config()
 const app = express();
 const port = process.env.PORT || 5000;
+
+//firebase admin initialization 
+
+var serviceAccount = require("./ema-jhon-simple-restart-firebase-adminsdk-ftitg-e90d82dbb1.json");
+
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount)
+});
 
 //middelware
 app.use(cors())
@@ -51,10 +60,43 @@ async function run(){
             res.json(products)
         });
 
+        //verify Token function 
+
+        async function verifyToken(req, res, next){
+            if(req.headers?.authorization?.startsWith('Bearer ')){
+                const idToken = req.headers.authorization.split('Bearer ')[1];
+                try{
+                    const decodedUser = await admin.auth().verifyIdToken(idToken);
+                    req.decodedUserEmail = decodedUser.email;
+                }
+                catch{
+
+                }
+            }
+            next();
+        }
+
+            //order get from db
+
+            app.get('/orders', verifyToken, async(req, res)=>{
+                const email = req.query.email;
+                if(req.decodedUserEmail===email){
+                    query = {email:email}
+                    const cursor = orderColection.find(query)
+                    const result = await cursor.toArray();
+                    res.send(result);
+                }
+                else{
+                    res.status(401).json({message:'User not authorized'})
+                }
+               
+            })
+
         //order collection add to db
 
         app.post('/orders', async(req, res)=>{
             const order = req.body;
+            order.createdAt = new Date();
             const result = await orderColection.insertOne(order)
             res.json(result)
 
